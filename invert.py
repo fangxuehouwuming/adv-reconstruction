@@ -59,7 +59,7 @@ def parse_args():
     )
 
     # TODO: 这是什么？？
-    # TODO: regularization_loss_weight, in paper it's 5.0, though here it's 2.0
+    # : regularization_loss_weight, in paper it's 5.0, though here it's 2.0
     parser.add_argument(
         "--loss_weight_enc",
         type=float,
@@ -156,18 +156,31 @@ def main():
         image_name = os.path.splitext(os.path.basename(filename[0]))[0]
 
         # viz_results: 原始图像x; G(z_0); G(z_n)
-        save_image(f"{output_dir}/{image_name}_ori.png", viz_results[0])
-        save_image(f"{output_dir}/{image_name}_enc.png", viz_results[1])
-        save_image(f"{output_dir}/{image_name}_inv.png", viz_results[-1])
+        save_image(f"{output_dir}/{image_name}_x.png", viz_results[0])
+        save_image(f"{output_dir}/{image_name}_G(z_0).png", viz_results[1])
+        save_image(f"{output_dir}/{image_name}_G(z_n).png", viz_results[-1])
         os.makedirs(f"{output_dir}/stargan", exist_ok=True)
+        # save_image(f"{output_dir}/{image_name}_ori.png", viz_results[0])
+        # save_image(f"{output_dir}/{image_name}_enc.png", viz_results[1])
+        # save_image(f"{output_dir}/{image_name}_inv.png", viz_results[-1])
+        # os.makedirs(f"{output_dir}/stargan", exist_ok=True)
 
         # starG_results: 对于每个编辑属性, 包含Fake(x)和Fake(G(z_n)); 例如, 5个属性, 则包含10个图像
         for num in range(len(args.selected_attrs)):
-            save_image(f"{output_dir}/stargan/{image_name}_rec_{num}.png", stargan_results[num])
             save_image(
-                f"{output_dir}/stargan/{image_name}_ori_{num}.png",
+                f"{output_dir}/stargan/{image_name}_Fake(G(z_n))_{args.selected_attrs[num]}.png",
+                stargan_results[num])
+            save_image(
+                f"{output_dir}/stargan/{image_name}_Fake(x)_{args.selected_attrs[num]}.png",
                 stargan_results[num + len(args.selected_attrs)],
             )
+        # for num in range(len(args.selected_attrs)):
+        #     save_image(f"{output_dir}/stargan/{image_name}_rec_{num}.png", stargan_results[num])
+        #     save_image(
+        #         f"{output_dir}/stargan/{image_name}_ori_{num}.png",
+        #         stargan_results[num + len(args.selected_attrs)],
+        #     )
+        break
 
 
 if __name__ == "__main__":
