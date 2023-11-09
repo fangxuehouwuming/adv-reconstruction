@@ -63,7 +63,7 @@ def parse_args():
     parser.add_argument(
         "--loss_weight_enc",
         type=float,
-        default=2.0,
+        default=5.0,
         help="The encoder loss scale for optimization."
         "(default: 2.0)",
     )

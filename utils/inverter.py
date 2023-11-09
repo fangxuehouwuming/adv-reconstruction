@@ -51,7 +51,7 @@ class StyleGANInverter(object):
                  iteration=100,
                  reconstruction_loss_weight=1.0,
                  perceptual_loss_weight=5e-5,
-                 regularization_loss_weight=2.0,
+                 regularization_loss_weight=5.0,
                  logger=None):
         """Initializes the inverter.
 
@@ -174,6 +174,7 @@ class StyleGANInverter(object):
         resize = torch.nn.Upsample(size=(128, 128), mode='bilinear').cuda()
 
         # stage(a) : get the initial latent code and do refinement
+        print(f'Stage(a) begins!')
         x = image[np.newaxis]
         x = self.G.to_tensor(x.astype(np.float32))
         x.requires_grad = False
@@ -195,7 +196,7 @@ class StyleGANInverter(object):
             loss = 0.0
 
             # Reconstruction loss.
-            x_rec = self.G.net.synthesis(z)  # x_rec = x_init_inv
+            x_rec = self.G.net.synthesis(z)  # x_rec = x_init_inv = G(z_0)
             loss_pix = torch.mean((x - x_rec)**2)
             loss = loss + loss_pix * self.loss_pix_weight
             log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
@@ -208,12 +209,29 @@ class StyleGANInverter(object):
                 loss = loss + loss_feat * self.loss_feat_weight
                 log_message += f', loss_feat: {_get_tensor_value(loss_feat):.3f}'
 
+            # # Regularization loss.
+            # if self.loss_reg_weight:
+            #     z_rec = self.E.net(x_rec).view(1, *self.encode_dim)
+            #     loss_reg = torch.mean((z - z_rec)**2)
+            #     loss = loss + loss_reg * self.loss_reg_weight
+            #     log_message += f', loss_reg: {_get_tensor_value(loss_reg):.3f}'
+
+            log_message += f', loss: {_get_tensor_value(loss):.3f}'
+            pbar.set_description_str(log_message)
+            if self.logger:
+                self.logger.debug(f'Stage(a), '
+                                  f'Step: {step:05d}, '
+                                  f'lr: {self.learning_rate:.2e}, '
+                                  f'{log_message}')
+
             # Do optimization.
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
+
         # stage(b): search a neighbor embedding which still reconstructs faithfully but disables DeepFake
+        print(f'\nStage(b) begins!')
         temp_z = z.detach().clone()  # temp_z is the output from stage(a)
         pbar = tqdm(range(1, self.iteration + 1), leave=True)
         epsilon = 0.05
@@ -265,7 +283,8 @@ class StyleGANInverter(object):
             log_message += f', loss: {_get_tensor_value(loss):.3f}'
             pbar.set_description_str(log_message)
             if self.logger:
-                self.logger.debug(f'Step: {step:05d}, '
+                self.logger.debug(f'Stage(b), '
+                                  f'Step: {step:05d}, '
                                   f'lr: {self.learning_rate:.2e}, '
                                   f'{log_message}')
 
