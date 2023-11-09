@@ -1,0 +1,32 @@
+0. 白盒实验
+
+1. 对于 face attribute editing, StarGAN 作为伪造模型
+
+2. StyleGAN pre-trained on FFHQ dataset [19] with 256 × 256 resolution as the generator
+
+3. 
+
+
+
+
+2. For each test image, we select five attributes classes consisting of ‘black hair’, ‘blond hair’, ‘brown hair’, ‘gender’ and ‘age’ for attributes editing, 
+and extract expression representation from four target faces as labels for expression editing.
+For face swapping, we randomly select a target face identity from the test images.
+
+
+# code files that have read
+utils\logger.py   ## not important
+
+
+
+# c_org: 
+    # tensor([[0., 0., 0., 0., 1.]])
+# label:
+    # tensor([[1., 0., 0., 0., 1.]], device='cuda:0')
+    # tensor([[0., 1., 0., 0., 1.]], device='cuda:0')
+    # tensor([[0., 0., 1., 0., 1.]], device='cuda:0')
+    # tensor([[0., 0., 0., 1., 1.]], device='cuda:0')
+    # tensor([[0., 0., 0., 0., 0.]], device='cuda:0')
+
+# invert.py 重构 invert函数
+# stage(b)的梯度更新过程似乎有误？重写
