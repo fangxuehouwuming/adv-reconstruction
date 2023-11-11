@@ -152,7 +152,7 @@ class BaseModule(object):
     state_dict = torch.load(self.weight_path)
     for var_name in self.model_specific_vars:
       state_dict[var_name] = self.net.state_dict()[var_name]
-    print(self.net)
+    # print(self.net)
     self.net.load_state_dict(state_dict)
     self.logger.info(f'Successfully loaded!')
 

@@ -50,22 +50,34 @@ def parse_args():
         help="Number of intermediate optimization results to "
         "save for each sample. (default: 5)",
     )
+
     parser.add_argument(
-        "--loss_weight_feat",
+        "--reconstruction_loss_weight",
+        type=float,
+        default=1.0,
+        help="The reconstruction loss scale for optimization. "
+        "(default: 1.0)",
+    )
+    parser.add_argument(
+        "--perceptual_loss_weight",
         type=float,
         default=5e-5,
         help="The perceptual loss scale for optimization. "
         "(default: 5e-5)",
     )
-
-    # TODO: 这是什么？？
-    # : regularization_loss_weight, in paper it's 5.0, though here it's 2.0
     parser.add_argument(
-        "--loss_weight_enc",
+        "--regularization_loss_weight",
         type=float,
-        default=5.0,
-        help="The encoder loss scale for optimization."
-        "(default: 2.0)",
+        default=5e-5,
+        help="The regularization loss scale for optimization. "
+        "(default: 5.0)",
+    )
+    parser.add_argument(
+        "--adversarial_loss_weight",
+        type=float,
+        default=5e-5,
+        help="The adversarial loss scale for optimization. "
+        "(default: 1.0)",
     )
 
     parser.add_argument(
@@ -118,9 +130,11 @@ def main():
         args.model_name,
         learning_rate=args.learning_rate,
         iteration=args.num_iterations,
-        reconstruction_loss_weight=1.0,
-        perceptual_loss_weight=args.loss_weight_feat,
-        regularization_loss_weight=args.loss_weight_enc,
+        reconstruction_loss_weight=args.reconstruction_loss_weight,
+        perceptual_loss_weight=args.perceptual_loss_weight,
+        regularization_loss_weight=args.regularization_loss_weight,
+        adversarial_loss_weight=args.adversarial_loss_weight,
+        epsilon=0.05,
         logger=logger,
     )
     image_size = inverter.G.resolution
