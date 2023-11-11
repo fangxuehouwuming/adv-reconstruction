@@ -202,145 +202,6 @@ class StyleGANInverter(object):
         z = _get_tensor_value(self.E.net(x).view(1, *self.encode_dim))
         return z.astype(np.float32)
 
-    # def invert(self, image, label, num_viz=0):
-
-    #     #load stargan
-    #     import sys
-    #     sys.path.append('./StarGAN/')
-    #     from stargan import Generator
-    #     starG = Generator(conv_dim=64, c_dim=5, repeat_num=6)
-    #     G_path = "./StarGAN/stargan_celeba_128/models/200000-G.ckpt"
-    #     starG.load_state_dict(torch.load(G_path, map_location=lambda storage, loc: storage))
-    #     starG.to(self.run_device)
-    #     resize = torch.nn.Upsample(size=(128, 128), mode='bilinear').cuda()
-
-    #     # stage(a) : get the initial latent code and do refinement
-    #     print(f'Stage(a) begins!')
-    #     x = image[np.newaxis]
-    #     x = self.G.to_tensor(x.astype(np.float32))
-    #     x.requires_grad = False
-    #     init_z = self.get_init_code(image)  # z_0
-    #     z = torch.Tensor(init_z).to(self.run_device)
-    #     z.requires_grad = True
-
-    #     optimizer = torch.optim.Adam([z], lr=self.learning_rate)
-
-    #     viz_results = []
-    #     viz_results.append(self.G.postprocess(_get_tensor_value(x))[0])
-    #     x_init_inv = self.G.net.synthesis(z)
-    #     viz_results.append(self.G.postprocess(_get_tensor_value(x_init_inv))[0])
-    #     pbar = tqdm(range(1, self.iteration + 1), leave=True)
-
-    #     stargan_results = []
-
-    #     for step in pbar:
-    #         loss = 0.0
-
-    #         # Reconstruction loss.
-    #         x_rec = self.G.net.synthesis(z)  # x_rec = x_init_inv = G(z_0)
-    #         loss_pix = torch.mean((x - x_rec)**2)
-    #         loss = loss + loss_pix * self.loss_pix_weight
-    #         log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
-
-    #         # Perceptual loss.
-    #         if self.loss_feat_weight:
-    #             x_feat = self.F.net(x)
-    #             x_rec_feat = self.F.net(x_rec)
-    #             loss_feat = torch.mean((x_feat - x_rec_feat)**2)
-    #             loss = loss + loss_feat * self.loss_feat_weight
-    #             log_message += f', loss_feat: {_get_tensor_value(loss_feat):.3f}'
-
-    #         # # Regularization loss.
-    #         # if self.loss_reg_weight:
-    #         #     z_rec = self.E.net(x_rec).view(1, *self.encode_dim)
-    #         #     loss_reg = torch.mean((z - z_rec)**2)
-    #         #     loss = loss + loss_reg * self.loss_reg_weight
-    #         #     log_message += f', loss_reg: {_get_tensor_value(loss_reg):.3f}'
-
-    #         log_message += f', loss: {_get_tensor_value(loss):.3f}'
-    #         pbar.set_description_str(log_message)
-    #         if self.logger:
-    #             self.logger.debug(f'Stage(a), '
-    #                               f'Step: {step:05d}, '
-    #                               f'lr: {self.learning_rate:.2e}, '
-    #                               f'{log_message}')
-
-    #         # Do optimization.
-    #         optimizer.zero_grad()
-    #         loss.backward()
-    #         optimizer.step()
-
-    #     # stage(b): search a neighbor embedding which still reconstructs faithfully but disables DeepFake
-    #     print(f'\nStage(b) begins!')
-    #     temp_z = z.detach().clone()  # temp_z is the output from stage(a)
-    #     pbar = tqdm(range(1, self.iteration + 1), leave=True)
-    #     epsilon = 0.05
-
-    #     # optimizer = CustomOptimizer([z], self.learning_rate, epsilon, temp_z)
-    #     # optimizer = ClippedAdam([z], self.learning_rate, epsilon)
-
-    #     for step in pbar:
-    #         loss = 0.0
-
-    #         '''NOTE: original code'''
-    #         # Reconstruction loss.
-    #         add = torch.clamp(z - temp_z, -epsilon, epsilon)
-    #         z_add = temp_z + add
-    #         x_rec = self.G.net.synthesis(z_add)
-    #         loss_pix = torch.mean((x - x_rec)**2)
-    #         loss = loss + loss_pix * self.loss_pix_weight
-    #         log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
-
-    #         # Perceptual loss.
-    #         if self.loss_feat_weight:
-    #             x_feat = self.F.net(x)
-    #             x_rec_feat = self.F.net(x_rec)
-    #             loss_feat = torch.mean((x_feat - x_rec_feat)**2)
-    #             loss = loss + loss_feat * self.loss_feat_weight
-    #             log_message += f', loss_feat: {_get_tensor_value(loss_feat):.3f}'
-
-    #         # adversarial loss
-    #         out_recs = []
-    #         out_oris = []
-    #         out_rec = starG(resize(x_rec), label[0])  # (1, 3, 128, 128)
-    #         out_ori = starG(resize(x), label[0])  # (1, 3, 128, 128)
-    #         out_recs.append(out_rec)
-    #         out_oris.append(out_ori)
-    #         loss_adv = torch.mean((resize(x) - out_rec)**2)
-    #         for c_trg in label[1:]:
-    #             out_rec = starG(resize(x_rec), c_trg)
-    #             out_ori = starG(resize(x), c_trg)
-    #             out_recs.append(out_rec)
-    #             out_oris.append(out_ori)
-    #             loss_adv += torch.mean((resize(x) - out_rec)**2)
-    #         if step == self.iteration:
-    #             for num in range(len(out_recs)):
-    #                 stargan_results.append(
-    #                     0.5 * 255. *
-    #                     (out_recs[num][0] + 1).detach().cpu().numpy().transpose(1, 2, 0))
-    #             for num in range(len(out_oris)):
-    #                 stargan_results.append(
-    #                     0.5 * 255. *
-    #                     (out_oris[num][0] + 1).detach().cpu().numpy().transpose(1, 2, 0))
-    #         loss = loss + loss_adv * 1.0  #self.loss_adv_weight
-    #         log_message += f', loss_adv: {_get_tensor_value(loss_adv):.3f}'
-    #         # log_message = f'loss_adv: {_get_tensor_value(loss_adv):.3f}'
-
-    #         log_message += f', loss: {_get_tensor_value(loss):.3f}'
-    #         pbar.set_description_str(log_message)
-    #         if self.logger:
-    #             self.logger.debug(f'Stage(b), '
-    #                               f'Step: {step:05d}, '
-    #                               f'lr: {self.learning_rate:.2e}, '
-    #                               f'{log_message}')
-
-    #     x_inv = self.G.net.synthesis(z)
-    #     viz_results.append(self.G.postprocess(_get_tensor_value(x_inv))[0])
-
-    #     # viz_results: 原始图像x; G(z_0); G(z_n)
-    #     # starG_results: 对于每个编辑属性, 包含Fake(x)和Fake(G(z_n)); 例如, 5个属性, 则包含10个图像
-    #     return _get_tensor_value(z), viz_results, stargan_results
-
     def invert(self, image, label, num_viz=0):
         """Inverts the given image to a latent code.
 
@@ -381,10 +242,11 @@ class StyleGANInverter(object):
             loss = 0.0
 
             # Reconstruction loss.
-            x_rec = self.G.net.synthesis(z)  # x_rec = x_init_inv = G(z_0)
-            loss_pix = torch.mean((x - x_rec)**2)
-            loss = loss + loss_pix * self.reconstruction_loss_weight
-            log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
+            if self.reconstruction_loss_weight:
+                x_rec = self.G.net.synthesis(z)  # x_rec = x_init_inv = G(z_0)
+                loss_pix = torch.mean((x - x_rec)**2)
+                loss = loss + loss_pix * self.reconstruction_loss_weight
+                log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
 
             # Perceptual loss.
             if self.perceptual_loss_weight:
@@ -433,12 +295,13 @@ class StyleGANInverter(object):
             loss = 0.0
 
             # Reconstruction loss.
-            add = torch.clamp(z - temp_z, -epsilon, epsilon)
-            z_add = temp_z + add
-            x_rec = self.G.net.synthesis(z_add)
-            loss_pix = torch.mean((x - x_rec)**2)
-            loss = loss + loss_pix * self.reconstruction_loss_weight
-            log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
+            if self.reconstruction_loss_weight:
+                add = torch.clamp(z - temp_z, -epsilon, epsilon)
+                z_add = temp_z + add
+                x_rec = self.G.net.synthesis(z_add)
+                loss_pix = torch.mean((x - x_rec)**2)
+                loss = loss + loss_pix * self.reconstruction_loss_weight
+                log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
 
             # Perceptual loss.
             if self.perceptual_loss_weight:
@@ -462,6 +325,14 @@ class StyleGANInverter(object):
                 loss = loss + loss_adv * self.adversarial_loss_weight
                 log_message += f', loss_adv: {_get_tensor_value(loss_adv):.3f}'
 
+            log_message += f', loss: {_get_tensor_value(loss):.3f}'
+            pbar.set_description_str(log_message)
+            if self.logger:
+                self.logger.debug(f'Stage(b), '
+                                  f'Step: {step:05d}, '
+                                  f'lr: {self.learning_rate:.2e}, '
+                                  f'{log_message}')
+
             # save the last stargan results
             if step == self.iteration:
                 for num in range(len(out_recs)):
@@ -472,14 +343,6 @@ class StyleGANInverter(object):
                     stargan_results.append(
                         0.5 * 255. *
                         (out_oris[num][0] + 1).detach().cpu().numpy().transpose(1, 2, 0))
-
-            log_message += f', loss: {_get_tensor_value(loss):.3f}'
-            pbar.set_description_str(log_message)
-            if self.logger:
-                self.logger.debug(f'Stage(b), '
-                                  f'Step: {step:05d}, '
-                                  f'lr: {self.learning_rate:.2e}, '
-                                  f'{log_message}')
 
             # Do optimization.
             optimizer.zero_grad()
