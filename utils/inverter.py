@@ -462,16 +462,16 @@ class StyleGANInverter(object):
                 loss = loss + loss_adv * self.adversarial_loss_weight
                 log_message += f', loss_adv: {_get_tensor_value(loss_adv):.3f}'
 
-                # save the last stargan results
-                if step == self.iteration:
-                    for num in range(len(out_recs)):
-                        stargan_results.append(
-                            0.5 * 255. *
-                            (out_recs[num][0] + 1).detach().cpu().numpy().transpose(1, 2, 0))
-                    for num in range(len(out_oris)):
-                        stargan_results.append(
-                            0.5 * 255. *
-                            (out_oris[num][0] + 1).detach().cpu().numpy().transpose(1, 2, 0))
+            # save the last stargan results
+            if step == self.iteration:
+                for num in range(len(out_recs)):
+                    stargan_results.append(
+                        0.5 * 255. *
+                        (out_recs[num][0] + 1).detach().cpu().numpy().transpose(1, 2, 0))
+                for num in range(len(out_oris)):
+                    stargan_results.append(
+                        0.5 * 255. *
+                        (out_oris[num][0] + 1).detach().cpu().numpy().transpose(1, 2, 0))
 
             log_message += f', loss: {_get_tensor_value(loss):.3f}'
             pbar.set_description_str(log_message)

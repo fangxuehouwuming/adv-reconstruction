@@ -75,7 +75,7 @@ def parse_args():
     parser.add_argument(
         "--adversarial_loss_weight",
         type=float,
-        default=5e-5,
+        default=1.0,
         help="The adversarial loss scale for optimization. "
         "(default: 1.0)",
     )
