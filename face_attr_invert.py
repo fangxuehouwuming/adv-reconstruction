@@ -1,16 +1,14 @@
 # python 3.6
 import os
 import argparse
-from tqdm import tqdm
 import numpy as np
 
-from utils.inverter import StyleGANInverter
 from utils.logger import setup_logger
-from utils.visualizer import HtmlPageVisualizer
-from utils.visualizer import save_image, load_image, resize_image
+from utils.visualizer import save_image
 
 from data_loader import get_loader
-from models.stylegan_generator_network import StyleGANGeneratorNet
+
+from inverter.face_attribute_inverter import FaceAttrInverter
 
 
 def parse_args():
@@ -126,8 +124,13 @@ def main():
     output_dir = args.output_dir or f"results/inversion"
     logger = setup_logger(output_dir, "inversion.log", "inversion_logger")
 
+    # ================================================ #
+    #
+    #                   1. load model                  #
+    #
+    # ================================================ #
     logger.info(f"Loading model.")
-    inverter = StyleGANInverter(
+    inverter = FaceAttrInverter(
         args.model_name,
         learning_rate=args.learning_rate,
         iteration=args.num_iterations,
@@ -138,13 +141,23 @@ def main():
         epsilon=0.05,
         logger=logger,
     )
-    image_size = inverter.G.resolution
 
+    # ================================================== #
+    #
+    #                   2. load dataset                  #
+    #
+    # ================================================== #
     # load celeba
     data_loader = get_loader(args.celeba_image_dir,
                              args.attr_path,
                              args.selected_attrs,
                              num_workers=4)
+
+    # ================================================== #
+    #
+    #                   2. start invert                  #
+    #
+    # ================================================== #
     for img_idx, (x_real, c_org, filename) in enumerate(data_loader):
         image = (255 * x_real[0].numpy().transpose(1, 2, 0)).astype(
             np.uint8)  # TODO: 感觉不需要在这里把图片变为0~255，可以直接修改dataloloader？
@@ -168,6 +181,13 @@ def main():
         code, viz_results, stargan_results = inverter.easy_invert(image,
                                                                   label,
                                                                   num_viz=args.num_results)
+
+        # ================================================ #
+        #
+        #                   3.save result                  #
+        #
+        # ================================================ #
+
         image_name = os.path.splitext(os.path.basename(filename[0]))[0]
 
         # viz_results: 原始图像x; G(z_0); G(z_n)
@@ -175,10 +195,6 @@ def main():
         save_image(f"{output_dir}/{image_name}_G(z_0).png", viz_results[1])
         save_image(f"{output_dir}/{image_name}_G(z_n).png", viz_results[-1])
         os.makedirs(f"{output_dir}/stargan", exist_ok=True)
-        # save_image(f"{output_dir}/{image_name}_ori.png", viz_results[0])
-        # save_image(f"{output_dir}/{image_name}_enc.png", viz_results[1])
-        # save_image(f"{output_dir}/{image_name}_inv.png", viz_results[-1])
-        # os.makedirs(f"{output_dir}/stargan", exist_ok=True)
 
         # starG_results: 对于每个编辑属性, 包含Fake(x)和Fake(G(z_n)); 例如, 5个属性, 则包含10个图像
         for num in range(len(args.selected_attrs)):
@@ -189,12 +205,6 @@ def main():
                 f"{output_dir}/stargan/{image_name}_Fake(x)_{args.selected_attrs[num]}.png",
                 stargan_results[num + len(args.selected_attrs)],
             )
-        # for num in range(len(args.selected_attrs)):
-        #     save_image(f"{output_dir}/stargan/{image_name}_rec_{num}.png", stargan_results[num])
-        #     save_image(
-        #         f"{output_dir}/stargan/{image_name}_ori_{num}.png",
-        #         stargan_results[num + len(args.selected_attrs)],
-        #     )
         break
 
 
