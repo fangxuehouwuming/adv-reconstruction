@@ -3,6 +3,8 @@ import os
 import argparse
 import numpy as np
 
+from torchvision import transforms
+
 from utils.logger import setup_logger
 from utils.visualizer import save_image
 
@@ -26,7 +28,7 @@ def parse_args():
         type=str,
         default="",
         help="Directory to save the results. If not specified, "
-        "`./results/inversion` "
+        "`./results/face_attr_inversion` "
         "will be used by default.",
     )
     parser.add_argument(
@@ -38,7 +40,7 @@ def parse_args():
     parser.add_argument(
         "--num_iterations",
         type=int,
-        default=100,
+        default=200,
         help="Number of optimization iterations. (default: 100)",
     )
     parser.add_argument(
@@ -121,7 +123,7 @@ def main():
     args = parse_args()
     print(args)
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-    output_dir = args.output_dir or f"results/inversion"
+    output_dir = args.output_dir or f"results/face_attr_inversion"
     logger = setup_logger(output_dir, "inversion.log", "inversion_logger")
 
     # ================================================ #
@@ -148,17 +150,34 @@ def main():
     #
     # ================================================== #
     # load celeba
+    transform = transforms.Compose([
+        transforms.Resize((256, 256)),  # 224
+        # transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+    ])
+
     data_loader = get_loader(args.celeba_image_dir,
                              args.attr_path,
                              args.selected_attrs,
-                             num_workers=4)
+                             num_workers=4,
+                             batch_size=1,
+                             state='test',
+                             nums=1000,
+                             transform=transform)
+    # print('len(data_loader):', len(data_loader))
 
     # ================================================== #
     #
     #                   2. start invert                  #
     #
     # ================================================== #
+
     for img_idx, (x_real, c_org, filename) in enumerate(data_loader):
+        '''
+        注意dataloader的输出:
+        '''
+
         image = (255 * x_real[0].numpy().transpose(1, 2, 0)).astype(
             np.uint8)  # TODO: 感觉不需要在这里把图片变为0~255，可以直接修改dataloloader？
 
@@ -178,6 +197,15 @@ def main():
                 c_trg[:, i] = c_trg[:, i] == 0  # Reverse attribute value.
             label.append(c_trg.cuda())
 
+            # c_org:
+            # tensor([[0., 0., 0., 0., 1.]])
+            # label:
+            # tensor([[1., 0., 0., 0., 1.]], device='cuda:0')
+            # tensor([[0., 1., 0., 0., 1.]], device='cuda:0')
+            # tensor([[0., 0., 1., 0., 1.]], device='cuda:0')
+            # tensor([[0., 0., 0., 1., 1.]], device='cuda:0')
+            # tensor([[0., 0., 0., 0., 0.]], device='cuda:0')
+
         code, viz_results, stargan_results = inverter.easy_invert(image,
                                                                   label,
                                                                   num_viz=args.num_results)
@@ -192,14 +220,14 @@ def main():
 
         # viz_results: 原始图像x; G(z_0); G(z_n)
         save_image(f"{output_dir}/{image_name}_x.png", viz_results[0])
-        save_image(f"{output_dir}/{image_name}_G(z_0).png", viz_results[1])
-        save_image(f"{output_dir}/{image_name}_G(z_n).png", viz_results[-1])
+        save_image(f"{output_dir}/{image_name}_G(z0).png", viz_results[1])
+        save_image(f"{output_dir}/{image_name}_G(zn).png", viz_results[-1])
         os.makedirs(f"{output_dir}/stargan", exist_ok=True)
 
         # starG_results: 对于每个编辑属性, 包含Fake(x)和Fake(G(z_n)); 例如, 5个属性, 则包含10个图像
         for num in range(len(args.selected_attrs)):
             save_image(
-                f"{output_dir}/stargan/{image_name}_Fake(G(z_n))_{args.selected_attrs[num]}.png",
+                f"{output_dir}/stargan/{image_name}_Fake(G(zn))_{args.selected_attrs[num]}.png",
                 stargan_results[num])
             save_image(
                 f"{output_dir}/stargan/{image_name}_Fake(x)_{args.selected_attrs[num]}.png",

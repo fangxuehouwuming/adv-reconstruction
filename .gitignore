@@ -104,5 +104,6 @@ venv.bak/
 .mypy_cache/
 
 # my_special_file
+/metrics/pretrain/*.pth
 /models/pretrain/*.pth
 /StarGAN/stargan_celeba_128/models/*
