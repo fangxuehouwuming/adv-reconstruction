@@ -1,13 +1,11 @@
 import sys
 import numpy as np
 from tqdm import tqdm
-
 import torch
 
-from inverter.base_inverter import BaseStyleGANInverter
+from base_inverter import BaseStyleGANInverter
 
-sys.path.append('./StarGAN/')
-from stargan import Generator
+from StarGAN.stargan import Generator
 
 
 def _get_tensor_value(tensor):
@@ -17,9 +15,12 @@ def _get_tensor_value(tensor):
 
 def load_stargan():
     starG = Generator(conv_dim=64, c_dim=5, repeat_num=6)
-    G_path = "./StarGAN/stargan_celeba_128/models/200000-G.ckpt"
+    # G_path = "./StarGAN/stargan_celeba_128/200000-G.ckpt"
+    G_path = "./StarGAN/200000-G.ckpt"
+
     starG.load_state_dict(torch.load(G_path, map_location=lambda storage, loc: storage))
     resize = torch.nn.Upsample(size=(128, 128), mode='bilinear').cuda()
+    # resize = torch.nn.Upsample(size=(256, 256), mode='bilinear').cuda()
     return starG, resize
 
 
@@ -101,7 +102,7 @@ class FaceAttrInverter(BaseStyleGANInverter):
         z = _get_tensor_value(self.E.net(x).view(1, *self.encode_dim))
         return z.astype(np.float32)
 
-    def invert(self, image, label, num_viz=0):
+    def invert(self, img_idx, image, label, num_viz=0):
         """Inverts the given image to a latent code.
 
         Basically, this function is based on gradient descent algorithm.
@@ -111,13 +112,15 @@ class FaceAttrInverter(BaseStyleGANInverter):
 
             starG_results: 对于每个编辑属性, 包含Fake(x)和Fake(G(z_n)); 例如, 5个属性, 则包含10个图像
         """
+        loss_a = 0.0
+        loss_b = 0.0
         # =================================================================================== #
         #                                                                                     #
         #                   1. Stage(a): inverting real faces into latent space               #
         #                                                                                     #
         # =================================================================================== #
 
-        print(f'Stage(a) begins!')
+        # print(f'Stage(a) begins!')
 
         x = image[np.newaxis]
         x = self.G.to_tensor(x.astype(np.float32))
@@ -134,9 +137,10 @@ class FaceAttrInverter(BaseStyleGANInverter):
         viz_results.append(self.G.postprocess(_get_tensor_value(x))[0])
         x_init_inv = self.G.net.synthesis(z)
         viz_results.append(self.G.postprocess(_get_tensor_value(x_init_inv))[0])
-        pbar = tqdm(range(1, self.iteration + 1), leave=True)
+        pbara = tqdm(range(1, self.iteration + 1), leave=True)
+        # pbar = tqdm(range(1, self.iteration + 1), leave=False)
 
-        for step in pbar:
+        for step in pbara:
             loss = 0.0
 
             # Reconstruction loss.
@@ -144,7 +148,7 @@ class FaceAttrInverter(BaseStyleGANInverter):
                 x_rec = self.G.net.synthesis(z)  # x_rec = x_init_inv = G(z_0)
                 loss_pix = torch.mean((x - x_rec)**2)
                 loss = loss + loss_pix * self.reconstruction_loss_weight
-                log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
+                log_message = f'Stage(a): loss_pix: {_get_tensor_value(loss_pix):.3f}'
 
             # Perceptual loss.
             if self.perceptual_loss_weight:
@@ -155,12 +159,16 @@ class FaceAttrInverter(BaseStyleGANInverter):
                 log_message += f', loss_feat: {_get_tensor_value(loss_feat):.3f}'
 
             log_message += f', loss: {_get_tensor_value(loss):.3f}'
-            pbar.set_description_str(log_message)
+            pbara.set_description_str(log_message)
             if self.logger:
-                self.logger.debug(f'Stage(a), '
+                self.logger.debug(f'ImgID: {img_idx:05d}, '
+                                  f'Stage(a), '
                                   f'Step: {step:05d}, '
-                                  f'lr: {self.learning_rate:.2e}, '
+                                  #   f'lr: {self.learning_rate:.2e}, '
                                   f'{log_message}')
+
+            if step == self.iteration:
+                loss_a = loss
 
             # Do optimization.
             optimizer.zero_grad()
@@ -173,7 +181,7 @@ class FaceAttrInverter(BaseStyleGANInverter):
         #                                                                                                        #
         # ====================================================================================================== #
 
-        print(f'\nStage(b) begins!')
+        # print(f'\nStage(b) begins!')
 
         #load stargan
         starG, resize = load_stargan()
@@ -181,7 +189,9 @@ class FaceAttrInverter(BaseStyleGANInverter):
         stargan_results = []
 
         temp_z = z.detach().clone()  # temp_z is the output from stage(a)
-        pbar = tqdm(range(1, self.iteration + 1), leave=True)
+        pbarb = tqdm(range(1, self.iteration + 1), leave=True)
+        # pbar = tqdm(range(1, self.iteration + 1), leave=False)
+
         epsilon = self.epsilon
 
         # TODO: which opt ???
@@ -189,7 +199,7 @@ class FaceAttrInverter(BaseStyleGANInverter):
         # optimizer = CustomOptimizer([z], self.learning_rate, epsilon, temp_z)
         # optimizer = ClippedAdam([z], self.learning_rate, epsilon)
 
-        for step in pbar:
+        for step in pbarb:
             loss = 0.0
 
             # Reconstruction loss.
@@ -201,7 +211,7 @@ class FaceAttrInverter(BaseStyleGANInverter):
 
                 loss_pix = torch.mean((x - x_rec)**2)
                 loss = loss + loss_pix * self.reconstruction_loss_weight
-                log_message = f'loss_pix: {_get_tensor_value(loss_pix):.3f}'
+                log_message = f'Stage(b): loss_pix: {_get_tensor_value(loss_pix):.3f}'
 
             # Perceptual loss.
             if self.perceptual_loss_weight:
@@ -217,23 +227,28 @@ class FaceAttrInverter(BaseStyleGANInverter):
                 out_oris = []
                 loss_adv = 0
                 for c_trg in label:
-                    out_rec = starG(resize(x_rec), c_trg)
-                    out_ori = starG(resize(x), c_trg)
+                    # out_rec = starG(resize(x_rec), c_trg)
+                    # out_ori = starG(resize(x), c_trg)
+                    out_rec = starG(x_rec, c_trg)
+                    out_ori = starG(x, c_trg)
+
                     out_recs.append(out_rec)
                     out_oris.append(out_ori)
-                    loss_adv += torch.mean((resize(x) - out_rec)**2)
+                    # loss_adv += torch.mean((resize(x) - out_rec)**2)
+                    loss_adv += torch.mean((x - out_rec)**2)
+
                 loss = loss + loss_adv * self.adversarial_loss_weight
                 log_message += f', loss_adv: {_get_tensor_value(loss_adv):.3f}'
 
             log_message += f', loss: {_get_tensor_value(loss):.3f}'
-            pbar.set_description_str(log_message)
+            pbarb.set_description_str(log_message)
             if self.logger:
-                self.logger.debug(f'Stage(b), '
+                self.logger.debug(f'ImgID: {img_idx:05d}, '
+                                  f'Stage(b), '
                                   f'Step: {step:05d}, '
-                                  f'lr: {self.learning_rate:.2e}, '
+                                  #   f'lr: {self.learning_rate:.2e}, '
                                   f'{log_message}')
 
-            # save the last stargan results
             if step == self.iteration:
                 for num in range(len(out_recs)):
                     stargan_results.append(
@@ -243,6 +258,8 @@ class FaceAttrInverter(BaseStyleGANInverter):
                     stargan_results.append(
                         0.5 * 255. *
                         (out_oris[num][0] + 1).detach().cpu().numpy().transpose(1, 2, 0))
+
+                loss_b = loss
 
             # Do optimization.
             z_old = z.clone()
@@ -257,10 +274,17 @@ class FaceAttrInverter(BaseStyleGANInverter):
 
         x_inv = self.G.net.synthesis(z)
         viz_results.append(self.G.postprocess(_get_tensor_value(x_inv))[0])
-        return _get_tensor_value(z), viz_results, stargan_results
+        loss_result = {
+            "ImgID": img_idx,
+            "loss_a": loss_a.item(),
+            "loss_b": loss_b.item(),
+            "loss_a+b": (loss_a + loss_b).item()
+        }
+        return _get_tensor_value(z), viz_results, stargan_results, loss_result
 
-    def easy_invert(self, image, label, num_viz=0):
+    def easy_invert(self, img_idx, image, label, num_viz=0):
         """Wraps functions `preprocess()` and `invert()` together."""
         print("******************** {} is working ********************".format(
             self.__class__.__name__))
-        return self.invert(self.preprocess(image), label, num_viz)
+        # return self.invert(img_idx, self.preprocess(image), label, num_viz)
+        return self.invert(img_idx, image, label, num_viz)

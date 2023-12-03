@@ -2,6 +2,7 @@
 ''''''
 import cv2
 import numpy as np
+import sys
 
 from models.stylegan_generator import StyleGANGenerator
 from models.stylegan_encoder import StyleGANEncoder

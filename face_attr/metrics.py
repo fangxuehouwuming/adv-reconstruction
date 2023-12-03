@@ -2,33 +2,42 @@
 For face attribute editing, we consider the L2-norm distance and compute the mean confidence difference (MCD) with an attribute recognition model.
 '''
 import os
+import sys
 
 import torch
 import torchvision.transforms as transforms
-from resnet import resnet50, resnet101
+import numpy as np
 from PIL import Image
+
+from ResNet.resnet import resnet50, resnet101
 
 transform = transforms.Compose([
     transforms.Resize((256, 256)),  # 224
     # transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
-    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
 ])
 
 
 def L2_distance(original, reconstructed):
-    return torch.sqrt(torch.sum((original - reconstructed)**2))
+    '''pixel L2-norm distance
+    '''
+    # original = (255 * original.numpy().transpose(1, 2, 0)).astype(np.uint8)
+    # reconstructed = (255 * reconstructed.numpy().transpose(1, 2, 0)).astype(np.uint8)
+    # return np.sqrt(np.sum((original - reconstructed)**2))
+
+    # return torch.sqrt(torch.functional.F.mse_loss(original, reconstructed))
+    return torch.functional.F.mse_loss(original, reconstructed)
+    # return torch.sqrt(torch.sum((original - reconstructed)**2))
 
 
-def MCD(model, original, reconstructed):
-    original_confidence = model(original.unsqueeze(0))  # 0.2565
-    reconstructed_confidence = model(reconstructed.unsqueeze(0))  # 0.2473
+def confidence_difference(original_confidence, reconstructed_confidence):
     confidence_difference = torch.abs(original_confidence - reconstructed_confidence)
     # confidence_difference = original_confidence - reconstructed_confidence
-    return confidence_difference.squeeze(0)
+    return confidence_difference
 
 
-def get_recognition_model(model_name="resnet50", model_path="metrics/pretrain/resnet50_65k.pth"):
+def get_recognition_model(model_name="resnet50", model_path=None):
     if model_name == "resnet50":
         model = resnet50(num_classes=5)
     if model_name == "resnet101":
@@ -90,7 +99,7 @@ def get_fake_x_gzn_imgs(fake_folder):
 
 # label: ["Black_Hair", "Blond_Hair", "Brown_Hair", "Male", "Young"]
 if __name__ == "__main__":
-    folder = "./results/face_attr_inversion"
+    folder = "./results/face_attr_inversion/original/"
     fake_folder = "./results/face_attr_inversion/stargan/"
     attr2idx = {"Black_Hair": 0, "Blond_Hair": 1, "Brown_Hair": 2, "Male": 3, "Young": 4}
     idx2attr = {0: "Black_Hair", 1: "Blond_Hair", 2: "Brown_Hair", 3: "Male", 4: "Young"}
@@ -111,29 +120,61 @@ if __name__ == "__main__":
     #     }
     # }
     fake_x_imgs, fake_gzn_imgs = get_fake_x_gzn_imgs(fake_folder)
-
+    '''
+    The L2-norm distance between the reconstructed data and StarGAN's output
+    '''
     print("L2-norm distance:")
     sum_distance = 0
-    for img_id in x_imgs:
-        distance = L2_distance(x_imgs[img_id], gzn_imgs[img_id])
-        sum_distance += distance
-        print(img_id, distance.item())
-    print("mean:", sum_distance.item() / len(x_imgs))
+    for img_id in gzn_imgs:
+        per_distance = 0
+        for attr in fake_gzn_imgs[img_id]:
+            distance = L2_distance(gzn_imgs[img_id], fake_gzn_imgs[img_id][attr])
+            per_distance += distance
+        sum_distance += per_distance / len(fake_gzn_imgs[img_id])
+        # sum_distance += per_distance
+        # print(img_id, distance.item())
+    print("mean:", sum_distance.item() / len(gzn_imgs))
 
+    del x_imgs, gz0_imgs, fake_x_imgs
+    '''
+    The MCD between the reconstructed data and StarGAN's output
+    '''
     print("MCD:")
     model_name = "resnet50"
-    model_path = "metrics/pretrain/resnet50_130k.pth"
-    regconition_model = get_recognition_model(model_name=model_name, model_path=model_path)
+    model_path = "./ResNet/pretrain/resnet50_65k.pth"
+    regconition_model = get_recognition_model(model_name=model_name,
+                                              model_path=model_path).to("cuda")
+    # regconition_model.cuda()
     regconition_model.eval()
     sum_mcd = 0
-    for img_id in gzn_imgs:
-        per_mcd = 0
-        for attr in fake_gzn_imgs[img_id]:
-            original = gzn_imgs[img_id]
-            reconstructed = fake_gzn_imgs[img_id][attr]
-            mcd = MCD(regconition_model, original, reconstructed)[attr2idx[attr]]
-            per_mcd += mcd
-            print(f'Image ID: {img_id}, Attribute: {attr}, MCD: {mcd}')
-        # sum_mcd += per_mcd / len(fake_gzn_imgs[img_id])
-        sum_mcd += per_mcd
-    print("mean:", sum_mcd / len(gzn_imgs))
+    cnt = 0
+    # torch.cuda.empty_cache()
+    with torch.no_grad():
+        for img_id in gzn_imgs:
+            # if cnt == 10:
+            #     break
+            cnt += 1
+            per_mcd = 0
+            for attr in fake_gzn_imgs[img_id]:
+                original = gzn_imgs[img_id].to("cuda")
+                reconstructed = fake_gzn_imgs[img_id][attr].to("cuda")
+
+                ori_confi = regconition_model(original.unsqueeze(0))  # 0.2565
+                rec_confi = regconition_model(reconstructed.unsqueeze(0))  # 0.2473
+                confi_dif = confidence_difference(ori_confi, rec_confi)  # 0.0092
+                mcd = confi_dif.squeeze(0)[attr2idx[attr]]
+
+                per_mcd += mcd
+                # print(f'Image ID: {img_id}, Attribute: {attr}, MCD: {mcd}')
+                del original, reconstructed, mcd, ori_confi, rec_confi, confi_dif
+                torch.cuda.empty_cache()
+            sum_mcd += per_mcd / len(fake_gzn_imgs[img_id])
+            # sum_mcd += per_mcd
+    print("mean:", sum_mcd.item() / len(gzn_imgs))
+    # print("mean:", sum_mcd.item() / cnt)
+'''
+L2-norm distance: 20
+MCD: mean: 0.04093208758283682
+'''
+
+# TODO: L2-norm distance ????
