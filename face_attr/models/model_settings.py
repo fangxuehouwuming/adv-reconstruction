@@ -32,12 +32,13 @@ MODEL_POOL = {
         'final_tanh': True,
         'use_bn': True,
     },
-    'stylegan_celebahq1024': {
-        'resolution': 1024,
+    'styleganinv_celebahq256': {
+        'resolution': 256,
         'repeat_w': False,
         'final_tanh': True,
         'use_bn': True,
     },
+    
 }
 
 # Settings for StyleGAN.

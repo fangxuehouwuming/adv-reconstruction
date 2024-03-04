@@ -83,12 +83,10 @@ class BaseGenerator(BaseModule):
             raise ValueError(f"Images should be with type `numpy.ndarray`!")
 
         if images.ndim != 4 or images.shape[1] != self.image_channels:
-            raise ValueError(
-                f"Input should be with shape [batch_size, channel, "
-                f"height, width], where channel equals to "
-                f"{self.image_channels}!\n"
-                f"But {images.shape} is received!"
-            )
+            raise ValueError(f"Input should be with shape [batch_size, channel, "
+                             f"height, width], where channel equals to "
+                             f"{self.image_channels}!\n"
+                             f"But {images.shape} is received!")
         images = (images - self.min_val) * 255 / (self.max_val - self.min_val)
         images = np.clip(images + 0.5, 0, 255).astype(np.uint8)
         images = images.transpose(0, 2, 3, 1)

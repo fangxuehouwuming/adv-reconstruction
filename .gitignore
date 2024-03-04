@@ -103,7 +103,8 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-# my_special_file
+# my_special_file]
+./vscode/
 **/pretrain/*
 **/results/*
 **/*.ckpt
@@ -114,3 +115,4 @@ venv.bak/
 
 face_expr*
 face_swap*
+train/

@@ -59,8 +59,9 @@ def setup_logger(work_dir=None, logfile_name='log.txt', logger_name='logger'):
     if os.path.isfile(logfile_name):
         print(f'Log file `{logfile_name}` has already existed!')
         while True:
-            decision = input(f'Would you like to overwrite it (Y/N): ')
-            decision = decision.strip().lower()
+            # decision = input(f'Would you like to overwrite it (Y/N): ')
+            # decision = decision.strip().lower()
+            decision = 'y'
             if decision == 'n':
                 raise SystemExit(f'Please specify another one.')
             if decision == 'y':

@@ -55,18 +55,16 @@ class BaseEncoder(BaseModule):
             raise ValueError(f'Images should be with dtype `numpy.uint8`!')
 
         if images.ndim != 4 or images.shape[3] not in [1, 3]:
-            raise ValueError(
-                f'Input should be with shape [batch_size, height, width '
-                f'channel], where channel equals to 1 or 3!\n'
-                f'But {images.shape} is received!')
+            raise ValueError(f'Input should be with shape [batch_size, height, width '
+                             f'channel], where channel equals to 1 or 3!\n'
+                             f'But {images.shape} is received!')
         if images.shape[3] == 1 and self.image_channels == 3:
             images = np.tile(images, (1, 1, 1, 3))
         if images.shape[3] != self.image_channels:
-            raise ValueError(
-                f'Number of channels of input image, which is '
-                f'{images.shape[3]}, is not supported by the current '
-                f'encoder, which requires {self.image_channels} '
-                f'channels!')
+            raise ValueError(f'Number of channels of input image, which is '
+                             f'{images.shape[3]}, is not supported by the current '
+                             f'encoder, which requires {self.image_channels} '
+                             f'channels!')
         if self.image_channels == 3 and self.channel_order == 'BGR':
             images = images[:, :, :, ::-1]
         images = images.astype(np.float32)

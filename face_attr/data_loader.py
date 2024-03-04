@@ -3,6 +3,7 @@ from torchvision import transforms as T
 from PIL import Image
 import torch
 import os
+import random
 
 
 class CelebA_HQ(data.Dataset):
@@ -88,8 +89,8 @@ class CelebA_HQ_test(CelebA_HQ):
             self.idx2attr[i] = attr_name
 
         lines = lines[2:]
-        # random.seed(1234)
-        # random.shuffle(lines)
+        random.seed(42)
+        random.shuffle(lines)
         nums = 2000 if self.nums is None else self.nums
         for i, line in enumerate(lines):
             if (i + 1) <= nums:

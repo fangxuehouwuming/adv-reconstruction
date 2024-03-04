@@ -21,25 +21,37 @@ def parse_args():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="styleganinv_ffhq256",
+        # default="styleganinv_ffhq256",
+        default="styleganinv_celebahq256",
         help="Name of the GAN model.",
     )
+
     parser.add_argument(
-        "--output_ori_dir",
+        "--output_dir",
         type=str,
-        default="./results/face_attr_inversion/original",
-        help="Directory to save the results. If not specified, "
-        "`./results/face_attr_inversion/original` "
-        "will be used by default.",
+        default=
+        "./results/face_attr_hq256encoder_hq256imgsize_256stargan_100iter_adv2_epsilon0.05",
     )
-    parser.add_argument(
-        "--output_fake_dir",
-        type=str,
-        default="./results/face_attr_inversion/stargan",
-        help="Directory to save the results. If not specified, "
-        "`./results/face_attr_inversion/stargan` "
-        "will be used by default.",
-    )
+
+    # parser.add_argument(
+    #     "--output_ori_dir",
+    #     type=str,
+    #     default=
+    #     "./results/face_attr_hq256encoder_hq256imgsize_256stargan_100iter_adv2_epsilon0.05/original",
+    #     help="Directory to save the results. If not specified, "
+    #     "`./results/face_attr_inversion/original` "
+    #     "will be used by default.",
+    # )
+    # parser.add_argument(
+    #     "--output_fake_dir",
+    #     type=str,
+    #     default=
+    #     "./results/face_attr_hq256encoder_hq256imgsize_256stargan_100iter_adv2_epsilon0.05/stargan",
+    #     help="Directory to save the results. If not specified, "
+    #     "`./results/face_attr_inversion/stargan` "
+    #     "will be used by default.",
+    # )
+
     parser.add_argument(
         "--learning_rate",
         type=float,
@@ -49,7 +61,7 @@ def parse_args():
     parser.add_argument(
         "--num_iterations",
         type=int,
-        default=200,
+        default=100,
         help="Number of optimization iterations. (default: 100)",
     )
     parser.add_argument(
@@ -77,16 +89,16 @@ def parse_args():
     parser.add_argument(
         "--regularization_loss_weight",
         type=float,
-        default=5e-5,
+        default=2,
         help="The regularization loss scale for optimization. "
         "(default: 5.0)",
     )
     parser.add_argument(
         "--adversarial_loss_weight",
         type=float,
-        default=1.0,
+        default=2.0,
         help="The adversarial loss scale for optimization. "
-        "(default: 1.0)",
+        "(default: 2.0)",
     )
 
     parser.add_argument(
@@ -132,10 +144,18 @@ def main():
     args = parse_args()
     print(args)
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
-    output_ori_dir = args.output_ori_dir
-    output_fake_dir = args.output_fake_dir
 
-    logger = setup_logger(f"./results/face_attr_inversion", "inversion.log", "inversion_logger")
+    output_dir = args.output_dir
+    output_ori_dir = output_dir + "/original"
+    output_fake_dir = output_dir + "/stargan"
+
+    # 如果不存在文件夹则创建
+    os.makedirs(output_ori_dir, exist_ok=True)
+    os.makedirs(output_fake_dir, exist_ok=True)
+
+    # 在ouput_ori_dir的上一级目录下创建日志文件
+    logger = setup_logger(output_dir, "inversion.log", "inversion_logger")
+
     csv_path = "./results/face_attr_inversion/loss_results.csv"
     fieldnames = ["ImgID", "loss_a", "loss_b", "loss_a+b"]
     # with open(csv_path, 'a', newline='') as csvfile:
@@ -169,7 +189,7 @@ def main():
     transform = transforms.Compose([
         transforms.Resize((256, 256)),  # 224
         transforms.ToTensor(),
-        transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
+        # transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
     ])
 
     data_loader = get_loader(args.celeba_image_dir,
@@ -178,7 +198,7 @@ def main():
                              num_workers=4,
                              batch_size=1,
                              state='test',
-                             nums=3,
+                             nums=500,
                              transform=transform)
     # print('len(data_loader):', len(data_loader))
 
@@ -222,7 +242,7 @@ def main():
             # tensor([[0., 0., 0., 0., 0.]], device='cuda:0')
         x_real = x_real[0].numpy()
         code, viz_results, stargan_results, loss_result = inverter.easy_invert(
-            img_idx, x_real, label, num_viz=args.num_results)
+            img_idx, image, label, num_viz=args.num_results)
 
         # ================================================ #
         #
@@ -247,10 +267,10 @@ def main():
                 stargan_results[num + len(args.selected_attrs)],
             )
 
-        with open(csv_path, 'a', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writerow(loss_result)
-            csvfile.close()
+        # with open(csv_path, 'a', newline='') as csvfile:
+        #     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        #     writer.writerow(loss_result)
+        #     csvfile.close()
 
         print('\n')
         # break
